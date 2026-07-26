@@ -23,10 +23,42 @@ class ParseScaleTest(unittest.TestCase):
     def test_bare_number(self):
         self.assertEqual(paper.parse_scale("600"), 600)
 
+    def test_engineering_scale_with_no_unit_means_feet(self):
+        # "1"=60" on a title block never means 60 metres.
+        self.assertEqual(paper.parse_scale('1"=60'), 720)
+        self.assertEqual(paper.parse_scale('1"=60'), paper.parse_scale("1\"=60'"))
+
+    def test_metric_needs_its_units_spelled_out(self):
+        with self.assertRaises(ValueError):
+            paper.parse_scale("1cm=20")
+
     def test_rejects_nonsense(self):
-        for bad in ("", "banana", "1:0", "-5"):
+        for bad in ("", "banana", "1:0", "-5", "=50'", '1"='):
             with self.assertRaises(ValueError):
                 paper.parse_scale(bad)
+
+
+class DefaultsTest(unittest.TestCase):
+    def test_the_three_everyday_sheets_come_first(self):
+        self.assertEqual(
+            paper.PAPER_NAMES[:3],
+            ["Letter (8.5x11)", "Tabloid (11x17)", "ARCH D (24x36)"])
+
+    def test_defaults_are_real_entries(self):
+        self.assertIn(paper.DEFAULT_PAPER, paper.PAPER_SIZES)
+        self.assertEqual(paper.parse_scale(paper.DEFAULT_SCALE), 720)
+
+    def test_default_ladder_parses_and_is_engineering(self):
+        ladder = paper.parse_scale_list(paper.DEFAULT_SCALE_LADDER)
+        self.assertEqual(ladder, [240, 360, 480, 600, 720, 1200, 2400])
+
+    def test_arch_d_at_1in_60ft(self):
+        # 22x34 printable at 1"=60' -> 1320 x 2040 ft
+        width, height = paper.sheet_size(
+            paper.PAPER_SIZES["ARCH D (24x36)"], 25.4, 720,
+            paper.METRES_PER_UNIT["ft"])
+        self.assertAlmostEqual(width, 2040.0, places=6)
+        self.assertAlmostEqual(height, 1320.0, places=6)
 
     def test_scale_list(self):
         self.assertEqual(

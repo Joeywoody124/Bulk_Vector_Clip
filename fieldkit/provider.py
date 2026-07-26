@@ -6,6 +6,7 @@ from .algs.atlas_grid_builder import AtlasGridBuilder
 from .algs.bulk_vector_clip import BulkVectorClip
 from .algs.close_undershoots import CloseUndershoots
 from .algs.fill_gaps import FillGaps
+from .algs.renumber_sheets import RenumberSheets
 from .algs.row_from_centerline import RightOfWayFromCenterline
 from .algs.sheet_estimator import SheetEstimator
 from .algs.snap_and_verify import SnapAndVerify
@@ -17,6 +18,7 @@ ALGORITHMS = [
     CloseUndershoots,
     AtlasGridBuilder,
     SheetEstimator,
+    RenumberSheets,
     BulkVectorClip,
 ]
 

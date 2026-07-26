@@ -39,10 +39,10 @@ class SheetEstimator(QgsProcessingAlgorithm):
             self.COVERAGE, "Coverage area", [QgsProcessing.TypeVectorPolygon]))
         add(QgsProcessingParameterString(
             self.SCALES, "Scales to try (comma separated)",
-            defaultValue="1\"=20',1\"=30',1\"=40',1\"=50',1\"=100',1\"=200'"))
+            defaultValue=paper.DEFAULT_SCALE_LADDER))
         add(QgsProcessingParameterEnum(
             self.PAPER, "Paper size", paper.PAPER_NAMES,
-            defaultValue=paper.PAPER_NAMES.index("ARCH D (24x36)")))
+            defaultValue=paper.PAPER_NAMES.index(paper.DEFAULT_PAPER)))
         add(QgsProcessingParameterEnum(
             self.ORIENTATION, "Orientation", _grid.ORIENTATION_LABELS, defaultValue=0))
         add(QgsProcessingParameterNumber(

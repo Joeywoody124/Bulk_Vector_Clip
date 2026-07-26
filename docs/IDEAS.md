@@ -146,6 +146,24 @@ calculator, labels and atlas expressions: `sheet_label()`, `station_at()`,
 
 ---
 
+### 20. Sheet Manager panel ★
+A docked panel over the sheet layer: the list of sheets, click to zoom, add a
+sheet by clicking where its centre goes, delete, edit a label inline, and
+renumber as you drag rather than after.
+
+Most of what a panel would give you already exists — the attribute table is the
+list, *Zoom to feature* is the zoom, copy-paste is "add a sheet", and
+**Renumber sheets** closes the loop. See
+[`sheet-workflow.md`](sheet-workflow.md) for how far that gets you.
+
+The two genuinely missing pieces are **click to place a sheet** and **live
+renumbering while dragging**. Both need a `QgsMapTool` plus a dock widget: a
+real chunk of work, untestable in CI, and the part of the codebase hardest to
+keep simple. Worth building once the existing loop has been used on a real
+sheet set and it's clear which parts actually grate.
+
+---
+
 ## Needs a map tool, not a Processing algorithm
 
 These want live interaction with the canvas, so they'd need a toolbar and a

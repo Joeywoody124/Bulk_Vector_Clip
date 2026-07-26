@@ -15,15 +15,16 @@ METRES_PER_UNIT = {
 }
 
 #: Sheet sizes in millimetres, portrait (width, height).
+#: The three in daily use come first so they are the short trip in the dropdown.
 #: Note ANSI D is 22x34 and ARCH D is 24x36 - they are not the same sheet.
 PAPER_SIZES = {
-    "ANSI A (8.5x11)": (215.9, 279.4),
-    "ANSI B (11x17)": (279.4, 431.8),
+    "Letter (8.5x11)": (215.9, 279.4),
+    "Tabloid (11x17)": (279.4, 431.8),
+    "ARCH D (24x36)": (609.6, 914.4),
     "ANSI C (17x22)": (431.8, 558.8),
     "ANSI D (22x34)": (558.8, 863.6),
     "ANSI E (34x44)": (863.6, 1117.6),
     "ARCH C (18x24)": (457.2, 609.6),
-    "ARCH D (24x36)": (609.6, 914.4),
     "ARCH E1 (30x42)": (762.0, 1066.8),
     "A4 (210x297)": (210.0, 297.0),
     "A3 (297x420)": (297.0, 420.0),
@@ -33,6 +34,12 @@ PAPER_SIZES = {
 }
 
 PAPER_NAMES = list(PAPER_SIZES)
+
+DEFAULT_PAPER = "ARCH D (24x36)"
+DEFAULT_SCALE = "1\"=60'"
+
+#: The engineering ladder, for the estimator's default.
+DEFAULT_SCALE_LADDER = "1\"=20',1\"=30',1\"=40',1\"=50',1\"=60',1\"=100',1\"=200'"
 
 _UNIT_TO_M = {
     '"': 0.0254,
@@ -53,21 +60,24 @@ _UNIT_TO_M = {
     "km": 1000.0,
 }
 
+_INCH_UNITS = ('"', "in", "inch", "inches")
+
 _NUM_UNIT = re.compile(r"^([0-9]*\.?[0-9]+)\s*(.*)$")
 
 
-def _length_to_metres(token):
-    """``50'`` -> 15.24, ``1"`` -> 0.0254, ``2000`` -> 2000.0 (assumed metres)."""
+def _split_number_unit(token):
+    """``50'`` -> (50.0, "'"), ``60`` -> (60.0, None)."""
     token = token.strip()
     match = _NUM_UNIT.match(token)
     if not match:
         raise ValueError("Cannot read a length from %r" % token)
-    value = float(match.group(1))
-    unit = match.group(2).strip().rstrip(".")
-    if not unit:
-        return value
+    unit = match.group(2).strip().rstrip(".").lower()
+    return float(match.group(1)), (unit or None)
+
+
+def _to_metres(value, unit):
     if unit not in _UNIT_TO_M:
-        raise ValueError("Unknown unit %r in %r" % (unit, token))
+        raise ValueError("Unknown unit %r" % unit)
     return value * _UNIT_TO_M[unit]
 
 
@@ -76,18 +86,35 @@ def parse_scale(text):
 
     ``1:2000`` -> 2000, ``1"=50'`` -> 600, ``1 in = 100 ft`` -> 1200,
     ``600`` -> 600.
+
+    An engineering scale with a bare right-hand side - ``1"=60`` - is read as
+    feet, because that is what it means on every plan set that writes it that
+    way.
     """
     raw = str(text).strip().lower()
     if not raw:
         raise ValueError("No scale given")
+
     if ":" in raw:
         left, right = raw.split(":", 1)
         denom = float(right.strip()) / float(left.strip())
     elif "=" in raw:
         left, right = raw.split("=", 1)
-        denom = _length_to_metres(right) / _length_to_metres(left)
+        left_value, left_unit = _split_number_unit(left)
+        right_value, right_unit = _split_number_unit(right)
+        if left_unit is None:
+            raise ValueError(
+                "Give the left-hand side a unit, for example 1\"=60' or 1cm=20m")
+        if right_unit is None:
+            if left_unit not in _INCH_UNITS:
+                raise ValueError(
+                    "Give the right-hand side a unit, for example 1cm=20m")
+            right_unit = "ft"
+        denom = (_to_metres(right_value, right_unit)
+                 / _to_metres(left_value, left_unit))
     else:
         denom = float(raw)
+
     if denom <= 0:
         raise ValueError("Scale denominator must be positive, got %s" % denom)
     return round(denom, 6)

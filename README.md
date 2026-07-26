@@ -56,7 +56,11 @@ covers the three that matter.
 | Tool | What it does | vs. native |
 |---|---|---|
 | **Atlas grid builder** | Coverage polygon + paper size + scale → numbered sheet grid. Sized from the paper, centred or snapped to a round coordinate, optionally rotated to the site's own axis, culled to cells with real coverage, numbered in plan-set order. Carries `sheet_id`, `scale`, `map_rotation`, `cov_pct` and neighbour ids for match lines. | `native:creategrid` gives spacing and overlap in map units, and nothing else on that list |
-| **Sheet count estimator** | "How many sheets at 1"=50'? At 1"=100'?" across a whole scale ladder, creating nothing. Counts come from really laying out and culling each grid. | Doesn't exist |
+| **Sheet count estimator** | "How many sheets at 1"=60'? At 1"=100'?" across a whole scale ladder, creating nothing. Counts come from really laying out and culling each grid. | Doesn't exist |
+| **Renumber sheets** | Move sheets wherever the job needs them with QGIS's own Move tool, then rebuild the numbering, grid refs and neighbour links from where they actually sit. Edits the layer in place, so it's a loop. A `locked` field keeps ids you typed by hand. | Doesn't exist |
+
+The generate → move → renumber loop is written up in
+[`docs/sheet-workflow.md`](docs/sheet-workflow.md).
 
 ### Bulk
 
@@ -64,9 +68,24 @@ covers the three that matter.
 |---|---|---|
 | **Bulk vector clip** | Clips every selected layer to one boundary into a single GeoPackage. Reprojects the boundary per layer, stores styles inside the GPKG, skips layers that clip to nothing. | `native:clip` is one layer at a time; the Batch dialog drops styles |
 
+## Defaults
+
+Set for engineering plan sets: **Letter, Tabloid and ARCH D (24×36)** at the
+top of the paper list, **ARCH D landscape** with 1" margins as the default, and
+**1"=60'** as the default scale. The estimator's ladder is 1"=20' through
+1"=200'. Scales parse however you write them — `1"=60'`, `1"=60`, `1 in = 60 ft`
+and `1:720` are all the same thing.
+
+Sheet sizes come out in the layer's own units, read from its CRS, so an
+imperial scale in a metre CRS is fine — 24×36 at 1"=60' is 621.8 × 402.3 m,
+the same ground as 2040 × 1320 ft. All of this lives in
+`fieldkit/core/paper.py` and is a one-line edit.
+
 ## Documentation
 
 - [`docs/INSTALL.md`](docs/INSTALL.md) — install, customize, call from Python
+- [`docs/sheet-workflow.md`](docs/sheet-workflow.md) — generating a sheet set,
+  moving sheets by hand, keeping the numbering and match lines correct
 - [`docs/tips/digitising-without-gaps.md`](docs/tips/digitising-without-gaps.md)
   — snapping, topological editing, avoid-overlap, tracing, advanced digitising
 - [`docs/IDEAS.md`](docs/IDEAS.md) — the backlog, with what QGIS already does

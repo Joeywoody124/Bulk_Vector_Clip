@@ -64,11 +64,12 @@ class AtlasGridBuilder(QgsProcessingAlgorithm):
             defaultValue=SIZE_PAPER))
         add(QgsProcessingParameterEnum(
             self.PAPER, "Paper size", paper.PAPER_NAMES,
-            defaultValue=paper.PAPER_NAMES.index("ARCH D (24x36)")))
+            defaultValue=paper.PAPER_NAMES.index(paper.DEFAULT_PAPER)))
         add(QgsProcessingParameterEnum(
             self.ORIENTATION, "Orientation", _grid.ORIENTATION_LABELS, defaultValue=0))
         add(QgsProcessingParameterString(
-            self.SCALE, "Scale (1\"=50', 1:2000, ...)", defaultValue="1\"=50'"))
+            self.SCALE, "Scale (1\"=60', 1:2000, ...)",
+            defaultValue=paper.DEFAULT_SCALE))
         add(QgsProcessingParameterNumber(
             self.MARGIN, "Margin around the map, in mm",
             QgsProcessingParameterNumber.Double, defaultValue=25.4, minValue=0.0))

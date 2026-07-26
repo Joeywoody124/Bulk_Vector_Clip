@@ -118,6 +118,118 @@ def order_cells(cells, mode=ORDER_ROW_NS):
     raise ValueError("Unknown ordering mode %r" % mode)
 
 
+def band_rows(items, band_ratio=0.5, axis="y"):
+    """Group sheets into rows (or columns) by where they actually sit.
+
+    ``items`` maps a key to ``(cx, cy, width, height)``. Returns a list of
+    bands: rows ordered top to bottom (``axis="y"``) or columns ordered left to
+    right (``axis="x"``), each band ordered left to right (or top to bottom).
+
+    This is the part that survives a human moving sheets around. Row and column
+    indices from the original grid stop meaning anything the moment a sheet is
+    dragged; a sheet's position never stops meaning something. A new band
+    starts when a sheet's centre is more than ``band_ratio`` of a sheet away
+    from the one that opened the current band, so nudging a sheet sideways
+    keeps it in its row and dropping it a full sheet down starts a new one.
+    """
+    if not items:
+        return []
+    if band_ratio <= 0:
+        raise ValueError("band_ratio must be positive")
+
+    if axis == "y":
+        primary, size_index, reverse = 1, 3, True
+        secondary, secondary_reverse = 0, False
+    elif axis == "x":
+        primary, size_index, reverse = 0, 2, False
+        secondary, secondary_reverse = 1, True
+    else:
+        raise ValueError("axis must be 'x' or 'y'")
+
+    ordered = sorted(items, key=lambda k: items[k][primary], reverse=reverse)
+
+    bands = []
+    current = []
+    reference = None
+    for key in ordered:
+        position = items[key][primary]
+        extent = abs(items[key][size_index]) or 0.0
+        if current and abs(position - reference) > band_ratio * max(extent, 1e-9):
+            bands.append(current)
+            current = []
+        if not current:
+            reference = position
+        current.append(key)
+    if current:
+        bands.append(current)
+
+    return [
+        sorted(band, key=lambda k: items[k][secondary], reverse=secondary_reverse)
+        for band in bands
+    ]
+
+
+def order_by_position(items, mode=ORDER_ROW_NS, band_ratio=0.5):
+    """Sheet order for features at arbitrary positions.
+
+    Returns ``(ordered_keys, bands)``. The bands come back too because sheet
+    ids, grid references and neighbours all need to know which row a sheet
+    landed in.
+    """
+    if mode in (ORDER_ROW_NS, ORDER_ROW_SN, ORDER_SERPENTINE):
+        bands = band_rows(items, band_ratio, axis="y")
+        if mode == ORDER_ROW_SN:
+            bands = list(reversed(bands))
+        if mode == ORDER_SERPENTINE:
+            ordered = []
+            for index, band in enumerate(bands):
+                ordered.extend(band if index % 2 == 0 else list(reversed(band)))
+            return ordered, bands
+        return [key for band in bands for key in band], bands
+    if mode == ORDER_COL:
+        bands = band_rows(items, band_ratio, axis="x")
+        return [key for band in bands for key in band], bands
+    raise ValueError("Unknown ordering mode %r" % mode)
+
+
+def _overlap(a_centre, a_size, b_centre, b_size):
+    low = max(a_centre - a_size / 2.0, b_centre - b_size / 2.0)
+    high = min(a_centre + a_size / 2.0, b_centre + b_size / 2.0)
+    return max(0.0, high - low)
+
+
+def neighbours_by_position(items, band_ratio=0.5):
+    """Which sheet is north, south, east and west of each one.
+
+    Always worked out from rows, whatever order the sheets are numbered in -
+    a match-line callout means the sheet next to this one on the ground, not
+    the next number in the set.
+    """
+    rows = band_rows(items, band_ratio, axis="y")
+    result = {}
+    for row_index, row in enumerate(rows):
+        for position, key in enumerate(row):
+            cx, _, width, _ = items[key]
+            entry = {
+                "w": row[position - 1] if position > 0 else None,
+                "e": row[position + 1] if position + 1 < len(row) else None,
+                "n": None,
+                "s": None,
+            }
+            for direction, other_index in (("n", row_index - 1), ("s", row_index + 1)):
+                if not 0 <= other_index < len(rows):
+                    continue
+                best, best_overlap = None, 0.0
+                for candidate in rows[other_index]:
+                    ox, _, owidth, _ = items[candidate]
+                    shared = _overlap(cx, width, ox, owidth)
+                    if shared > best_overlap:
+                        best, best_overlap = candidate, shared
+                entry[direction] = best
+            result[key] = entry
+    return result
+
+
 def alpha_label(index):
     """0 -> A, 25 -> Z, 26 -> AA. Spreadsheet-style column labels."""
     if index < 0:
