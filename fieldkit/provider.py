@@ -5,6 +5,7 @@ from qgis.core import QgsProcessingProvider
 from .algs.atlas_grid_builder import AtlasGridBuilder
 from .algs.bulk_vector_clip import BulkVectorClip
 from .algs.close_undershoots import CloseUndershoots
+from .algs.erase_overlaps import EraseOverlaps
 from .algs.fill_gaps import FillGaps
 from .algs.renumber_sheets import RenumberSheets
 from .algs.row_from_centerline import RightOfWayFromCenterline
@@ -14,6 +15,7 @@ from .algs.snap_and_verify import SnapAndVerify
 ALGORITHMS = [
     RightOfWayFromCenterline,
     FillGaps,
+    EraseOverlaps,
     SnapAndVerify,
     CloseUndershoots,
     AtlasGridBuilder,

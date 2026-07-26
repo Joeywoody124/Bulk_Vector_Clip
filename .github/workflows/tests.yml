@@ -6,7 +6,8 @@ on:
   pull_request:
 
 jobs:
-  test:
+  unit:
+    name: unit tests (no QGIS)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,3 +28,27 @@ jobs:
         run: |
           python -m pip install --quiet pyflakes
           python -m pyflakes fieldkit tests
+
+  smoke:
+    name: smoke tests (real QGIS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install QGIS
+        # Ubuntu 24.04 ships QGIS 3.34, which is the version this plugin
+        # declares as its minimum. Uses the runner's system python3 (3.12),
+        # because the QGIS bindings are built against it.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends \
+            python3-qgis qgis-providers python3-pyqt5.sip
+
+      - name: Version
+        run: python3 -c "import qgis.core; print(qgis.core.Qgis.QGIS_VERSION)"
+
+      - name: Run every algorithm against real layers
+        env:
+          QT_QPA_PLATFORM: offscreen
+          XDG_RUNTIME_DIR: /tmp
+        run: python3 tests/smoke_qgis.py

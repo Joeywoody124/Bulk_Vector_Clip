@@ -10,14 +10,20 @@ doesn't already ship.
 
 ## Editing - the strongest candidates
 
-### 1. Erase overlaps ★
-The mirror of *Fill gaps*. Where two polygons overlap, give the overlap to one
-of them by a rule: first drawn, largest, smallest, or by a priority field.
-Report what was taken from whom.
+### 1. Erase overlaps — **built in v0.2.0**
+Where two polygons overlap, one keeps the ground by a rule — first drawn,
+larger, smaller, or a priority field — and the other is trimmed. Overlaps above
+a size threshold are reported rather than resolved, because half an acre is a
+boundary disagreement, not digitising slop.
 
 Gaps and overlaps are the same digitising mistake in opposite directions, and
-fixing only one is half a job. **Native:** nothing. The Geometry Checker can
-find overlaps but its fixes are all-or-nothing.
+fixing only one is half a job.
+
+> Verifying against real QGIS also turned up a limitation in *Fill gaps*: it
+> could only see gaps that were fully enclosed. There is now a sliver-width
+> setting for open-ended ones. Worth remembering when reading the rest of this
+> list — the gap between "should work" and "does work" is only found by running
+> it.
 
 ### 2. Polygonize with diagnostics ★
 `native:polygonize` builds polygons from linework and silently drops any loop

@@ -1,7 +1,7 @@
 # Roadmap & Architecture
 
-Phase 1 is built and installable (v0.1.0). Everything from Phase 2 on is still
-a plan. See [`IDEAS.md`](IDEAS.md) for the wider backlog.
+Phase 1 is built, installable and verified against a real QGIS (v0.2.0).
+Phase 2 has started. See [`IDEAS.md`](IDEAS.md) for the wider backlog.
 
 ---
 
@@ -61,6 +61,7 @@ fieldkit/                    # the plugin package (zip this to install)
     fill_gaps.py
     snap_and_verify.py
     close_undershoots.py
+    erase_overlaps.py
     atlas_grid_builder.py
     sheet_estimator.py
     renumber_sheets.py
@@ -69,7 +70,9 @@ fieldkit/                    # the plugin package (zip this to install)
   core/                      # pure python, no qgis imports — the tested part
     gridmath.py
     paper.py
-tests/                       # runs without QGIS
+tests/
+  test_*.py                  # pure maths, runs without QGIS
+  smoke_qgis.py              # every algorithm, against a real QGIS
 ```
 
 Two things from the original sketch aren't there yet. `expressions/` waits for
@@ -107,19 +110,39 @@ title used here. Easy to change before first release, painful after.
 The architecture held: the `core/` vs `algs/` split paid for itself on the two
 sheet tools, which share all their maths and disagree about nothing.
 
-**Not yet verified in QGIS.** Every tool compiles and the pure maths is tested,
-but nothing here has been run against a real layer. The acceptance test at the
-end of the atlas spec is the first thing to do.
+**Verified in QGIS 3.34.** `tests/smoke_qgis.py` runs every algorithm end to
+end on synthetic layers in EPSG:3361 and checks the results — 61 assertions,
+green, and running in CI on every push. It found one real defect (see below)
+and otherwise confirmed the tools do what the help says.
 
-### Phase 2 — after real use
+Two things the smoke run taught, both now fixed:
 
-Order deliberately not fixed. Run v0.1 on a live job first; what's annoying in
-practice should decide this, not what looked good on paper. The candidates, with
-notes on what QGIS already does, are in [`IDEAS.md`](IDEAS.md).
+- **Fill gaps could not see open-ended slivers.** An interior ring only exists
+  where a gap is fully enclosed; a sliver between two polygons that is open at
+  both ends is not a hole in the dissolved coverage, so the tool silently found
+  nothing. There is now a *sliver width* setting that buffers the coverage out
+  and back in to close narrow gaps, then subtracts — and a dedupe pass so an
+  enclosed hole is not reported by both methods.
+- **A Processing provider must be kept referenced from Python.** The registry
+  does not own the object; a garbage-collected provider registers zero
+  algorithms and reports no error. `plugin.py` was already right; the first
+  draft of the smoke harness was not.
 
-The four that look strongest today: **Erase overlaps** (the mirror of Fill
-Gaps), **Polygonize with diagnostics**, **Fillet corners**, and **Corridor
-strip maps**.
+### Phase 2 — started
+
+- [x] **Erase overlaps** — the mirror of Fill gaps, and the obvious first one:
+      fixing gaps but not overlaps leaves a coverage half clean
+
+Next up, in the order they look most useful — but run v0.2 on a live job first,
+because what's annoying in practice should decide this, not what looked good on
+paper:
+
+- **Polygonize with diagnostics** — build polygons from linework and report
+  where the loops fail to close
+- **Fillet corners** — curb returns and ROW radii
+- **Corridor strip maps** — sheets that follow an alignment
+
+Full notes, with what QGIS already does for each, in [`IDEAS.md`](IDEAS.md).
 
 ---
 

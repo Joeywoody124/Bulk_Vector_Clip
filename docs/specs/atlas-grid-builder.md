@@ -1,7 +1,8 @@
 # Spec — Atlas Grid Builder
 
-**Status:** built in v0.1.0 as `fieldkit:atlasgridbuilder`. Differences between
-this spec and the code are called out inline.
+**Status:** built as `fieldkit:atlasgridbuilder`, and covered by the QGIS smoke
+tests since v0.2.0. Differences between this spec and the code are called out
+inline.
 
 Turn a coverage polygon into a sheet grid that's ready to drive an atlas:
 sized from the paper, snapped, optionally rotated, culled to real coverage,
@@ -14,7 +15,7 @@ and numbered the way a plan set reads.
 `native:creategrid` takes an extent, an H/V spacing, and an H/V overlap, in map
 units. To use it for atlas sheets today you:
 
-1. Work out that a 24×36 sheet at 1"=50' with 1" margins is 1100 × 1700 ft —
+1. Work out that a 24×36 sheet at 1"=60' with 1" margins is 2040 × 1320 ft —
    by hand, on the back of an envelope.
 2. Get the extent of your coverage layer, and accept that the grid starts at
    the extent's lower-left corner wherever that happens to fall.
@@ -53,11 +54,11 @@ collapsed under "Advanced" with working defaults.
 | `PAPER` | enum from `PAPER_SIZES` in `core/paper.py` | ARCH D (24x36) |
 | `ORIENTATION` | landscape / portrait | landscape |
 | `MARGIN` | mm or in | 1 in |
-| `SCALE` | scale denominator or `1"=50'` string | 1"=50' |
+| `SCALE` | scale denominator or `1"=60'` string | 1"=60' |
 
 Cell size in map units = `(paper_dimension − 2 × margin) × scale_denominator`,
 with the paper dimension converted into the layer's units first. For a CRS in
-US survey feet: 24 in − 2 in = 22 in printable; at 1"=50', that's 1100 ft.
+feet: 24 in − 2 in = 22 in printable; at 1"=60', that's 1320 ft.
 
 **B. Direct.** `CELL_WIDTH` / `CELL_HEIGHT` in map units, for when you already
 know.
@@ -180,7 +181,7 @@ title block reads `sheet_id`, with no per-project editing.
 Printed to the log on every run, rather than hidden behind a flag:
 
 ```
-Sheet covers 1700.00 x 1100.00 map units.
+Sheet covers 2040.00 x 1320.00 map units.
 Grid 4 x 3 = 12 cells; kept 9 (3 empty, 0 below the coverage threshold).
 9 sheet(s) written.
 ```
@@ -215,9 +216,14 @@ file and is verified by hand in QGIS.
 
 ## Acceptance test (do this on a real site before calling it done)
 
-**None of this has been run yet** — the code is written and the maths is
-tested, but no tool here has touched a real layer. This is the first thing to
-do with v0.1.
+`tests/smoke_qgis.py` now covers steps 1-3 automatically against real QGIS: it
+checks the sheet comes out 2040 x 1320 ft at ARCH D / 1"=60' in EPSG:3361, that
+numbering is contiguous, that neighbour links are reciprocal, that the top row
+has nothing to its north, that every surviving sheet touches the site, and that
+a snapped origin lands on a round coordinate.
+
+Steps 4-6 still need a human, because they are about what the printed set looks
+like:
 
 1. Load a real project boundary in EPSG:2273.
 2. Run the Sheet count estimator across `1"=20'` through `1"=200'`. Numbers

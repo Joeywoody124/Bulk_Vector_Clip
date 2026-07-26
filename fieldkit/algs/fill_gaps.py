@@ -10,6 +10,7 @@ from qgis.core import (
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingException,
+    QgsProcessingParameterDistance,
     QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterFeatureSource,
@@ -32,6 +33,7 @@ class FillGaps(QgsProcessingAlgorithm):
     INPUT = "INPUT"
     BOUNDARY = "BOUNDARY"
     MAX_AREA = "MAX_AREA"
+    SLIVER_WIDTH = "SLIVER_WIDTH"
     MODE = "MODE"
     OUTPUT = "OUTPUT"
     OUTPUT_GAPS = "OUTPUT_GAPS"
@@ -52,6 +54,13 @@ class FillGaps(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber(
                 self.MAX_AREA, "Ignore gaps larger than this area (0 = no limit)",
                 QgsProcessingParameterNumber.Double, defaultValue=0.0, minValue=0.0
+            )
+        )
+        self.addParameter(
+            QgsProcessingParameterDistance(
+                self.SLIVER_WIDTH,
+                "Also find open-ended slivers narrower than (0 = off)",
+                defaultValue=0.0, parentParameterName=self.INPUT, minValue=0.0
             )
         )
         self.addParameter(
@@ -77,6 +86,8 @@ class FillGaps(QgsProcessingAlgorithm):
             raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
         boundary_source = self.parameterAsSource(parameters, self.BOUNDARY, context)
         max_area = self.parameterAsDouble(parameters, self.MAX_AREA, context)
+        sliver_width = self.parameterAsDouble(
+            parameters, self.SLIVER_WIDTH, context)
         mode = self.parameterAsEnum(parameters, self.MODE, context)
 
         out_fields = QgsFields(source.fields())
@@ -149,6 +160,24 @@ class FillGaps(QgsProcessingAlgorithm):
                 if remainder is not None and not remainder.isEmpty():
                     for part in self._parts(remainder):
                         gaps.append((part, "boundary"))
+
+        if sliver_width > 0:
+            # An interior ring only exists where a gap is fully enclosed. A
+            # sliver between two polygons that is open at both ends is not a
+            # hole in the dissolved coverage, so it needs finding another way:
+            # buffer out and back in, which closes anything narrower than the
+            # buffer diameter, then subtract the original.
+            radius = sliver_width / 2.0
+            closed = union.buffer(radius, 8)
+            if closed is not None and not closed.isEmpty():
+                closed = closed.buffer(-radius, 8)
+            if closed is not None and not closed.isEmpty():
+                extra = closed.difference(union)
+                if extra is not None and not extra.isEmpty():
+                    for part in self._parts(extra):
+                        gaps.append((part, "sliver"))
+
+        gaps = self._dedupe(gaps)
 
         if max_area > 0:
             before = len(gaps)
@@ -231,6 +260,25 @@ class FillGaps(QgsProcessingAlgorithm):
         return results
 
     @staticmethod
+    def _dedupe(gaps):
+        """Drop empties, and gaps found twice by two different methods."""
+        kept = []
+        for geometry, origin in gaps:
+            area = geometry.area()
+            if area <= 0:
+                continue
+            duplicate = False
+            for existing, _ in kept:
+                shared = geometry.intersection(existing)
+                if (shared is not None and not shared.isEmpty()
+                        and shared.area() > 0.5 * area):
+                    duplicate = True
+                    break
+            if not duplicate:
+                kept.append((geometry, origin))
+        return kept
+
+    @staticmethod
     def _parts(geometry):
         """Split a possibly-multipart geometry into single-part QgsGeometry objects."""
         if geometry.isMultipart():
@@ -275,6 +323,16 @@ class FillGaps(QgsProcessingAlgorithm):
             "<p>Supply a <b>boundary</b> layer as well and the tool also finds gaps "
             "along the outside edge - the strip between your polygons and the "
             "parcel or ROW line they are supposed to reach.</p>"
+            "<h3>Open-ended slivers</h3>"
+            "<p>A gap is only a hole in the dissolved coverage if something "
+            "surrounds it. Two polygons side by side with a gap between them "
+            "leave a sliver that is open at both ends, and no amount of "
+            "dissolving turns that into a hole.</p>"
+            "<p>Set <i>Also find open-ended slivers narrower than</i> to catch "
+            "those - the tool buffers the coverage out and back in by half that "
+            "distance, which closes anything narrower, and takes the difference. "
+            "It costs two buffer operations over the whole layer, so leave it at "
+            "0 unless you need it.</p>"
             "<h3>Ignore gaps larger than</h3>"
             "<p>The important setting. Leave it at 0 and a genuine courtyard, pond "
             "or unmapped parcel gets swallowed too. Set it to a few square units "
