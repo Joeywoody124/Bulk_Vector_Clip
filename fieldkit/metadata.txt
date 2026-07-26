@@ -1,0 +1,20 @@
+[general]
+name=Field Kit
+qgisMinimumVersion=3.34
+description=Sheet grids for atlases, bulk clipping, and polygon editing tools that fill gaps and align geometry.
+version=0.1.0
+author=Joeywoody124
+email=joeywoody124@gmail.com
+
+about=A Processing provider for the jobs QGIS technically supports but makes tedious. Builds numbered atlas sheet grids sized from the paper and scale, estimates sheet counts before you generate anything, clips many layers to one boundary in a single pass, builds right-of-way polygons from a centerline with independent left and right offsets, fills the slivers left between polygons that should share edges, snaps geometry to a reference layer and shows you exactly what moved, and closes dangling line ends.
+
+tracker=https://github.com/Joeywoody124/Bulk_Vector_Clip/issues
+repository=https://github.com/Joeywoody124/Bulk_Vector_Clip
+homepage=https://github.com/Joeywoody124/Bulk_Vector_Clip
+
+tags=processing,atlas,layout,grid,clip,editing,topology,right of way,civil
+
+category=Plugins
+experimental=True
+deprecated=False
+hasProcessingProvider=yes

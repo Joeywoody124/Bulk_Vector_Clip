@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Unit tests
+        # fieldkit/core imports nothing from qgis, which is what makes this
+        # runnable without a QGIS install.
+        run: python -m unittest discover -s tests -v
+
+      - name: Syntax check every module
+        run: python -m compileall -q fieldkit tests
+
+      - name: Lint
+        run: |
+          python -m pip install --quiet pyflakes
+          python -m pyflakes fieldkit tests

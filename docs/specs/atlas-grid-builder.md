@@ -1,6 +1,7 @@
 # Spec — Atlas Grid Builder
 
-**Status:** design. Not implemented.
+**Status:** built in v0.1.0 as `fieldkit:atlasgridbuilder`. Differences between
+this spec and the code are called out inline.
 
 Turn a coverage polygon into a sheet grid that's ready to drive an atlas:
 sized from the paper, snapped, optionally rotated, culled to real coverage,
@@ -49,7 +50,7 @@ collapsed under "Advanced" with working defaults.
 
 | Parameter | Type | Default |
 |---|---|---|
-| `PAPER` | enum from `presets/paper_sizes.json` | ANSI D (24×36) |
+| `PAPER` | enum from `PAPER_SIZES` in `core/paper.py` | ARCH D (24x36) |
 | `ORIENTATION` | landscape / portrait | landscape |
 | `MARGIN` | mm or in | 1 in |
 | `SCALE` | scale denominator or `1"=50'` string | 1"=50' |
@@ -95,22 +96,27 @@ every sheet by 30 ft and invalidating the whole printed set.
 | Parameter | Type | Default | Notes |
 |---|---|---|---|
 | `ROTATION` | enum | None | `None` / `Auto (fit coverage)` / `Specify angle` |
-| `ANGLE` | degrees | 0 | CCW from east, for the explicit mode |
+| `ANGLE` | degrees | 0 | Clockwise, for the explicit mode |
 
 **Auto** uses `QgsGeometry.orientedMinimumBoundingBox()` on the (dissolved)
 coverage, which returns the angle of the minimum-area rotated rectangle. For a
 diagonal corridor or a site fronting a skewed road this typically cuts sheet
 count meaningfully.
 
-Implementation: rotate the coverage by `−θ` about the anchor, grid in that
-frame with plain axis-aligned math, then rotate each cell back by `+θ`.
-`QgsGeometry.rotate(angle, center)` handles both directions. All the messy
-parts stay in the unrotated frame.
+Implementation: rotate the coverage by `θ` about the centroid to square it to
+the axes, grid in that frame with plain rectangle math, then rotate each cell
+back by `−θ`. `QgsGeometry.rotate(angle, center)` handles both directions. All
+the messy parts stay in the axis-aligned frame.
 
-Rotated sheets need the layout map item rotated to match — write `θ` to a
-`rotation` attribute so the map item can bind to it via a data-defined
-override. Note in the docs that the north arrow must then be data-defined too,
-or it will lie.
+**As built:** `orientedMinimumBoundingBox()`'s sign convention isn't worth
+guessing at, so the code tries `+θ` and `−θ` and keeps whichever squares the
+coverage up more tightly. Self-correcting, and cheap.
+
+Rotated sheets need the layout map item rotated to match — `θ` is written to
+`map_rotation` for a data-defined override. The north arrow then needs a
+data-defined rotation of `−map_rotation` or it will lie. **Check the first
+rotated set by eye** — this is the one place a sign error would be invisible
+until it's printed.
 
 ### Culling
 
@@ -127,12 +133,14 @@ accidental corners, 5% starts dropping legitimate edge sheets.
 
 | Parameter | Type | Default | Notes |
 |---|---|---|---|
-| `ORDER` | enum | Row-major, N→S | `Row-major N→S` / `Row-major S→N` / `Column-major` / `Serpentine` / `Along a line` |
+| `ORDER` | enum | Row-major, N→S | `Row-major N→S` / `Row-major S→N` / `Column-major` / `Serpentine`. *Along a line not built — see below* |
 | `START_AT` | int | 1 | |
 | `TEMPLATE` | string | `C-{n:02d}` | Tokens: `{n}`, `{row}`, `{col}`, `{alpha_row}`, `{alpha_col}` |
 
-**Along a line** takes a centerline and orders sheets by their projection onto
-it — the correct order for a corridor, where row-major is nonsense.
+**Along a line** would take a centerline and order sheets by their projection
+onto it — the right order for a corridor, where row-major is nonsense. Not
+built: a corridor wants rotated-per-station sheets too, so it belongs with
+Corridor Strip Maps rather than bolted onto this tool.
 
 **Serpentine** (left-to-right, then right-to-left) minimizes the pan between
 consecutive sheets when reviewing on screen.
@@ -142,8 +150,8 @@ consecutive sheets when reviewing on screen.
 | Parameter | Type | Default |
 |---|---|---|
 | `OUTPUT` | polygon layer | memory layer, added to project |
-| `MAKE_INDEX` | bool | false → also emit a key-map layer |
-| `ESTIMATE_ONLY` | bool | false → report the count, create nothing |
+| ~~`MAKE_INDEX`~~ | — | Not built. The `grid_ref` attribute already makes a key map a labelling job |
+| ~~`ESTIMATE_ONLY`~~ | — | Dropped: the summary always prints to the log, and the multi-scale question belongs to the estimator |
 
 ---
 
@@ -156,49 +164,49 @@ consecutive sheets when reviewing on screen.
 | `row`, `col` | int | Grid position in the rotated frame |
 | `grid_ref` | string | `A1`, `B2` — for a key map |
 | `center_x`, `center_y` | double | In layer CRS |
-| `rotation` | double | Degrees; 0 unless rotated |
-| `scale` | int | Denominator, so the layout can label itself |
+| `map_rotation` | double | Degrees clockwise; 0 unless rotated |
+| `scale` | double | Denominator, so the layout can label itself. Null in direct-cell-size mode |
 | `cov_pct` | double | Percent of the cell covered — makes thin sheets easy to spot |
 | `nbr_n/s/e/w` | string | Neighbor `sheet_id` or null, for match-line labels |
 
-`sheet_id`, `rotation`, and `scale` as attributes are what let one layout serve
+`sheet_id`, `map_rotation`, and `scale` as attributes are what let one layout serve
 every project: the map item binds scale and rotation to the feature, and the
 title block reads `sheet_id`, with no per-project editing.
 
 ---
 
-## Estimate mode
+## The summary
 
-With `ESTIMATE_ONLY`, run the full pipeline including culling but write nothing.
-Report:
+Printed to the log on every run, rather than hidden behind a flag:
 
 ```
-ANSI D (24×36) landscape, 1" margins, 1"=50', 5% overlap
-Sheet size:      1100 × 1700 ft
-Grid:            4 cols × 3 rows = 12 cells
-After culling:   9 sheets  (3 dropped: empty; 0 dropped: below 0.5% coverage)
-Rotation:        none
+Sheet covers 1700.00 x 1100.00 map units.
+Grid 4 x 3 = 12 cells; kept 9 (3 empty, 0 below the coverage threshold).
+9 sheet(s) written.
 ```
 
-The Sheet Count Estimator (§3.2 of the roadmap) is this same path in a loop
-over a scale ladder.
+The Sheet Count Estimator is this same path in a loop over a scale ladder,
+sharing `algs/_grid.py` so the two can't drift apart.
 
 ---
 
 ## Core math to isolate and test
 
-These go in `fieldkit/core/` with no QGIS imports, and get unit tests:
+In `fieldkit/core/`, no QGIS imports, 40 unit tests:
 
-- `paper_to_map_units(paper_mm, margin_mm, scale_denom, unit)` — including the
-  ft vs ftUS distinction, which is a real 2 ppm difference on State Plane
-  coordinates and the kind of thing that's invisible until it isn't.
-- `grid_origin(bbox, cell_w, cell_h, anchor_mode, snap_to)` → `(x0, y0, ncols, nrows)`
-- `cell_bounds(x0, y0, cell_w, cell_h, overlap, row, col)`
-- `order_cells(cells, mode, start_at)` → ordered indices
-- `format_sheet_id(template, n, row, col)` — including alpha-column overflow
-  past Z (`AA`, `AB`)
-- `rotate_point(x, y, cx, cy, theta)` — used by tests to verify the rotate/
-  unrotate round trip is lossless
+- `paper.parse_scale()` — `1:2000`, `1"=50'`, `1 in = 100 ft`, bare denominators
+- `paper.sheet_size()` — with an explicit metres-per-unit, so ft, ftUS and
+  metres are all just a number. The ft/ftUS difference is 2 ppm: real, and
+  worth about 0.002 ft on a 1100 ft sheet, so it matters for *coordinates* and
+  not for sheet sizes. An earlier draft of this spec overstated it.
+- `gridmath.count_along()` — with a property test that the cells really do
+  cover the span, and that dropping one would not
+- `gridmath.grid_origin()` — including that snapping is stable when the
+  boundary moves slightly, which is the whole reason the mode exists
+- `gridmath.cell_bounds()`, `order_cells()` — including that every mode is a
+  permutation, losing no cells
+- `gridmath.alpha_label()` — overflow past Z (`AA`, `AB`)
+- `gridmath.rotate_point()` — round trip is lossless
 
 Everything touching a `QgsFeature`, a layer, or a CRS stays in the algorithm
 file and is verified by hand in QGIS.
@@ -207,10 +215,14 @@ file and is verified by hand in QGIS.
 
 ## Acceptance test (do this on a real site before calling it done)
 
+**None of this has been run yet** — the code is written and the maths is
+tested, but no tool here has touched a real layer. This is the first thing to
+do with v0.1.
+
 1. Load a real project boundary in EPSG:2273.
-2. Estimate mode across `1"=20'` through `1"=200'`. Numbers should be sane and
-   match a hand check on at least one scale.
-3. Generate at 1"=50', ANSI D, 5% overlap, centered, culled.
+2. Run the Sheet count estimator across `1"=20'` through `1"=200'`. Numbers
+   should be sane and match a hand check on at least one scale.
+3. Generate at 1"=50', ARCH D, 5% overlap, centered, culled.
 4. Wire it to a layout atlas — page name `sheet_id`, sorted by `sheet_no`,
    fixed scale from `scale`.
 5. Export the set. Confirm: no blank sheets, adjacent sheets visibly overlap,

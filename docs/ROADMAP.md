@@ -1,31 +1,32 @@
 # Roadmap & Architecture
 
-Planning document. No code exists yet — this describes what to build and in
-what order.
+Phase 1 is built and installable (v0.1.0). Everything from Phase 2 on is still
+a plan. See [`IDEAS.md`](IDEAS.md) for the wider backlog.
 
 ---
 
 ## 1. Delivery format
 
-**Decision: a Processing provider plugin, where every algorithm is also a
-standalone drop-in script.**
+**Decision: a Processing provider plugin, one file per algorithm.**
 
-Each tool is a `QgsProcessingAlgorithm` subclass in its own file with no
-imports from the rest of the package. That single choice buys everything:
+Each tool is a `QgsProcessingAlgorithm` subclass in its own file under
+`fieldkit/algs/`. That single choice buys:
 
 - It appears in the **Processing Toolbox**, so it works in the Batch dialog,
   inside graphical **Models**, and from `processing.run()` in the Python
   console — for free, no extra UI code.
-- The same `.py` file can be dropped into
-  `~/.local/share/QGIS/QGIS3/profiles/default/processing/scripts/` (or
-  `%APPDATA%` on Windows) and used **without installing anything**. Useful on a
-  locked-down work machine.
 - Customizing means opening one readable file. No build step, no compile.
+- A thin plugin wrapper (`__init__.py`, `plugin.py`, `provider.py`,
+  `metadata.txt`) registers the lot as a "Field Kit" group in the toolbox.
 
-A thin plugin wrapper (`__init__.py`, `metadata.txt`, `provider.py`) registers
-them all as a "Field Kit" group in the toolbox, plus registers the custom
-expression functions and a small toolbar for the two or three tools that
-genuinely want a live dialog.
+**Revised during Phase 1:** the original plan also promised that any single
+`.py` could be dropped into `processing/scripts/` and used without installing
+the plugin. That holds for the self-contained editing tools, but the sheet
+tools share `core/gridmath.py` and `algs/_grid.py` between them, and QGIS's
+script loader has no way to resolve those imports. Duplicating the maths into
+each file to preserve the claim would cost more than the claim is worth, so the
+plugin install is the supported path. `docs/INSTALL.md` describes a symlink
+setup that keeps editing-and-reloading just as quick.
 
 ### Testability constraint
 
@@ -38,35 +39,42 @@ QGIS parameters, calls the pure function, and writes features.
 This is not a purity exercise; it's the only way to have regression tests at
 all, and grid math is exactly the kind of code that breaks silently.
 
-### Proposed layout
+### Layout, as built
 
 ```
 README.md
 LICENSE
 docs/
+  INSTALL.md
   ROADMAP.md
+  IDEAS.md
   specs/atlas-grid-builder.md
   tips/                      # the "hacks and tips" half of the suite
 fieldkit/                    # the plugin package (zip this to install)
-  __init__.py
-  metadata.txt
+  __init__.py                # classFactory
+  plugin.py                  # registers/unregisters the provider
   provider.py
+  metadata.txt
   algs/
+    row_from_centerline.py
+    fill_gaps.py
+    snap_and_verify.py
+    close_undershoots.py
     atlas_grid_builder.py
     sheet_estimator.py
     bulk_vector_clip.py
-    ...
+    _grid.py                 # shared QGIS-side helpers for the sheet tools
   core/                      # pure python, no qgis imports — the tested part
     gridmath.py
     paper.py
-    naming.py
-  expressions/functions.py
-  presets/
-    paper_sizes.json
-    scale_ladders.json
-    naming_templates.json
 tests/                       # runs without QGIS
 ```
+
+Two things from the original sketch aren't there yet. `expressions/` waits for
+the expression pack (idea 19). `presets/*.json` turned out to be premature —
+paper sizes and the unit table live in `core/paper.py`, which is a one-line
+edit and needs no loader; JSON presets only earn their place once there is
+something worth sharing between machines.
 
 ### Naming
 
@@ -79,51 +87,41 @@ title used here. Easy to change before first release, painful after.
 
 ## 2. Phasing
 
-### Phase 1 — prove the pattern (the flagship + the namesake)
+### Phase 1 — done (v0.1.0)
 
-1. Plugin scaffolding + provider + one preset file.
-2. **Atlas Grid Builder** — full spec in
-   [`specs/atlas-grid-builder.md`](specs/atlas-grid-builder.md).
-3. **Sheet Count Estimator** — shares the same core module; ~40 lines of
-   adapter once the grid math exists.
-4. **Bulk Vector Clip** — the repo's namesake, and the simplest useful tool.
-5. CI running the pure-python tests.
+- [x] Plugin scaffolding, provider, CI running the pure-python tests
+- [x] **Atlas Grid Builder** — [spec](specs/atlas-grid-builder.md)
+- [x] **Sheet Count Estimator**
+- [x] **Bulk Vector Clip** — the repo's namesake
+- [x] **Right of way from centerline**, **Fill gaps**, **Snap and verify**,
+      **Close dangling line ends** — the editing group, added to Phase 1 once
+      it became clear that day-to-day editing, not sheet layout, is where the
+      time actually goes
+- [x] `docs/tips/digitising-without-gaps.md`
 
-Phase 1 is the whole architecture proven end to end. If the split between
-`core/` and `algs/` doesn't feel good here, fix it before there are twelve
-tools.
+The architecture held: the `core/` vs `algs/` split paid for itself on the two
+sheet tools, which share all their maths and disagree about nothing.
 
-### Phase 2 — the rest of the sheet workflow
+**Not yet verified in QGIS.** Every tool compiles and the pure maths is tested,
+but nothing here has been run against a real layer. The acceptance test at the
+end of the atlas spec is the first thing to do.
 
-6. Corridor Strip Maps
-7. Sheet Index & Match Lines
-8. Batch Layout Export
-9. Auto-configure Atlas (build the layout + wire the atlas from a grid layer)
+### Phase 2 — after real use
 
-### Phase 3 — project hygiene
+Order deliberately not fixed. Run v0.1 on a live job first; what's annoying in
+practice should decide this, not what looked good on paper. The candidates, with
+notes on what QGIS already does, are in [`IDEAS.md`](IDEAS.md).
 
-10. Project Packager / Relink
-11. CRS Doctor
-12. Geometry Cleanup Chain
-13. Style Broadcaster
-
-### Phase 4 — domain tools & polish
-
-14. Station & Offset toolkit
-15. Expression Pack
-16. Field Toolkit
-17. Canvas Export at Scale
-18. `docs/tips/` written up properly
-
-Ship Phase 1 as `v0.1.0` and use it on a real project before writing Phase 2.
-Real use will reorder this list.
+The four that look strongest today: **Erase overlaps** (the mirror of Fill
+Gaps), **Polygonize with diagnostics**, **Fillet corners**, and **Corridor
+strip maps**.
 
 ---
 
 ## 3. Tool specifications
 
-Feasibility is noted per tool. Everything listed is achievable with the PyQGIS
-API in QGIS 3.28+ and no third-party dependencies.
+The three below are built. Everything uses the PyQGIS API in QGIS 3.34+ and no
+third-party dependencies.
 
 ### 3.1 Atlas Grid Builder ★ flagship
 
@@ -136,8 +134,12 @@ coverage, and numbered in the order a plan set reads.
 
 What `native:creategrid` gives you today: spacing X/Y, extent, and overlap in
 map units. What it does not: paper-driven sizing, rotation, culling to a
-coverage polygon, sliver suppression, sheet numbering, serpentine order,
-neighbor attributes, or an estimate mode. That gap is the tool.
+coverage polygon, sliver suppression, sheet numbering, serpentine order, or
+neighbor attributes. That gap is the tool.
+
+The spec's `ESTIMATE_ONLY` flag was dropped as built: the grid summary always
+prints to the log, and the multi-scale question is the estimator's whole job,
+so the flag would have been a parameter earning nothing.
 
 ### 3.2 Sheet Count Estimator
 
@@ -176,148 +178,28 @@ grid, look at the feature count, delete it, change the spacing, repeat."
   writing dozens of empty layers.
 - Optional: buffer the boundary by N units first (the "give me a little
   context around the site" case).
-- Optional: add results to the project in a group, replacing the originals.
-- Handles no-geometry and raster layers by passing them through or clipping
-  with `gdal:cliprasterbymasklayer`.
 
-**Feasibility:** wraps `native:clip` per layer plus `QgsVectorFileWriter`;
-straightforward. The style-preservation and skip-empty behavior are what make
-it better than the Batch Processing dialog.
+Two things from the spec are **not** built: adding the results back into the
+project in a group, and handling raster layers via
+`gdal:cliprasterbymasklayer`. Rasters are the bigger gap — the tool warns and
+skips them rather than pretending. Both are easy to add once it's clear they're
+wanted.
 
-### 3.4 Corridor Strip Maps
+**As built:** clips with `QgsGeometry.intersection()` per feature behind a
+bounding-box request, rather than shelling out to `native:clip` per layer —
+fewer moving parts, and it makes the skip-empty and per-layer reprojection
+behaviour straightforward. The style preservation is what makes it better than
+the Batch Processing dialog.
 
-**Input:** centerline, sheet length along the line (map units, or derived from
-paper+scale), sheet width, overlap, start station.
+### 3.4 onwards
 
-**Behavior:** walk the line at the interval, take the local bearing at each
-station, emit a rectangle rotated to that bearing and centered on (or offset
-from) the line. Attributes: `sheet_no`, `sta_begin`, `sta_end`, `bearing`.
+The remaining tool specs moved to [`IDEAS.md`](IDEAS.md), which frames each one
+against what QGIS already does rather than as a commitment to build it. Keeping
+two lists in sync was going to fail, and the backlog is the more honest home.
 
-**Feasibility:** `QgsGeometry.interpolate()` for the point at a distance,
-`interpolateAngle()` for the bearing, build the rectangle in local coordinates
-and `QgsGeometry.rotate()` it. Well-trodden.
-
-Optionally emit *curved* strip sheets for tight-radius alignments by
-substituting a buffer of the line segment — worth it only if the flat version
-proves inadequate on real alignments.
-
-**Why not native:** nothing native does this. It's the reason people buy
-Civil 3D for plan-and-profile sheets.
-
-### 3.5 Sheet Index & Match Lines
-
-Byproduct of the grid tools: given a sheet layer, produce (a) a key-map layer
-of sheet outlines with labels, and (b) `nbr_n` / `nbr_s` / `nbr_e` / `nbr_w`
-attributes so a match-line label can read "SEE SHEET C-12".
-
-**Feasibility:** neighbor lookup is grid arithmetic when the grid came from
-our own tool (row/col are attributes); for arbitrary sheet layers, fall back to
-a spatial touch test.
-
-### 3.6 Batch Layout Export
-
-**Input:** which layouts (default: all), format, DPI, filename template with
-tokens (`{layout}`, `{page}`, `{atlas_name}`, `{date}`), merge-to-single-PDF
-toggle.
-
-**Feasibility:** `QgsLayoutExporter.exportToPdf()` / `exportToImage()`, and the
-atlas overload of `exportToPdf()` for a merged set. Straightforward; the value
-is the filename templating and doing every layout in one go.
-
-### 3.7 Auto-configure Atlas
-
-Take a sheet layer and a layout (existing or created from a template), set the
-atlas coverage layer, page-name expression, sort expression, and set the map
-item to atlas-driven with a fixed scale.
-
-**Feasibility:** `QgsLayoutAtlas.setCoverageLayer()`, `setPageNameExpression()`,
-`setSortExpression()`, `QgsLayoutItemMap.setAtlasDriven()` and
-`setAtlasScalingMode()`. All public API. This is the step that turns "I have a
-grid" into "I have a plan set," and it's the most-repeated manual sequence in
-the whole workflow.
-
-### 3.8 Project Packager / Relink
-
-Copy every file-based data source into `<project>/data/`, rewrite each layer's
-source path, and save. Optionally zip the result.
-
-**Feasibility:** iterate `QgsProject.instance().mapLayers()`, parse
-`layer.source()` (careful: GPKG and delimited-text sources are URIs with
-parameters, not bare paths — use `QgsProviderRegistry.decodeUri()`), copy, then
-`layer.setDataSource()`. The URI handling is the only fiddly part.
-
-**Why not native:** `native:package` writes layers to a new GPKG but leaves the
-project pointing at the originals. This fixes the actual problem — handing a
-project to someone else without a wall of red exclamation marks.
-
-### 3.9 CRS Doctor
-
-Read-only scan producing a report:
-- Layers whose CRS ≠ project CRS (and whether that's fine or not).
-- Layers with no CRS or a CRS QGIS guessed.
-- Layers whose extent doesn't overlap the majority of the project — the
-  classic "assigned ft to a metre CRS" symptom.
-- `ft` vs `ftUS` mismatches within one project, which silently introduce a
-  2 ppm error that matters on State Plane coordinates.
-
-**Feasibility:** all `QgsCoordinateReferenceSystem` / `QgsMapLayer.extent()`
-inspection. Easy, high value, and nothing native reports it.
-
-### 3.10 Geometry Cleanup Chain
-
-Chain `native:fixgeometries` → `native:snapgeometries` → remove duplicate
-vertices → drop null/empty geometries, and report a before/after count per
-step.
-
-**Feasibility:** `processing.run()` chaining. The report is the differentiator.
-
-### 3.11 Style Broadcaster
-
-Copy one layer's style to every layer matching a name pattern or regex; and
-save/load named style sets from a folder so the same symbology applies across
-projects.
-
-**Feasibility:** `QgsMapLayer.saveNamedStyle()` / `loadNamedStyle()`.
-
-### 3.12 Station & Offset
-
-- Label chainage along a line at an interval, with tick marks.
-- Generate offset points at intervals (both sides, configurable).
-- Given a point layer and a centerline, compute station + offset per point.
-
-**Feasibility:** `lineLocatePoint()`, `interpolate()`, `closestSegmentWithContext()`.
-All present in `QgsGeometry`.
-
-### 3.13 Expression Pack
-
-Custom expression functions registered by the plugin with `@qgsfunction`, so
-they're available in the Field Calculator, labels, and atlas page-name
-expressions:
-
-- `sheet_label(row, col)` → `A1`, `B12`
-- `station_at(layer, geom)` → `12+34.56`
-- `area_ac(geom)` / `area_sf(geom)` — unit-aware, no manual conversion factor
-- `fmt_scale(denominator)` → `1" = 50'`
-
-**Feasibility:** `@qgsfunction` from `qgis.utils`; registered on plugin load,
-unregistered on unload. Small, and disproportionately useful day to day.
-
-### 3.14 Field Toolkit
-
-One dialog to add, rename, drop, and reorder many fields at once, with
-expression support per added field.
-
-**Feasibility:** wraps `native:refactorfields`, which already does this but
-through a table widget that is painful for more than three fields.
-
-### 3.15 Canvas Export at Scale
-
-Export the current canvas at an exact scale and paper size to PDF/PNG without
-building a layout: build a `QgsPrintLayout` in memory, add a map item at the
-requested scale centered on the canvas, export, discard.
-
-**Feasibility:** straightforward. This is the single best "hack" in the suite —
-a one-click answer to "I just need a 24×36 at 1"=50' of what I'm looking at."
+The four editing tools built in Phase 1 are specified in their own
+`shortHelpString()` — visible in the toolbox as the tool's help panel, which is
+where you actually want it while running them.
 
 ---
 
@@ -336,27 +218,38 @@ are better as documentation than as code:
   clean road casings, saving `.qml` per project vs per layer.
 - **processing-models.md** — when a Model beats a script, and how to make a
   Model take a layer choice instead of a hard-coded layer.
-- **shortcuts.md** — the keyboard and snapping settings that actually change
-  throughput (advanced snapping config, tracing, `Ctrl+.` toggles).
 - **crs-notes.md** — State Plane, `ft` vs `ftUS`, and when on-the-fly
   reprojection quietly costs you accuracy.
 
-Each tool also gets a short `docs/specs/*.md` before it's written. Writing the
-spec first is what keeps rule #1 (simpler than the native path) honest.
+Written so far: **digitising-without-gaps.md** — snapping configuration,
+topological editing, avoid-overlap, tracing, and the advanced digitising panel.
+That one came first because it is the honest answer to most of "help me trace
+without gaps": three settings beat any cleanup tool.
+
+Each tool's own documentation lives in its `shortHelpString()`, which QGIS shows
+in the tool's help panel. That is where it gets read, so that is where it goes;
+`docs/specs/` is for design decisions that need arguing out before the code
+exists.
 
 ---
 
 ## 5. Open questions
 
-1. **Units.** Which CRS do you actually work in day to day (EPSG:2273 SC State
-   Plane ftUS?) — the defaults in `presets/` should match it rather than being
-   generic.
-2. **Paper and scale ladders.** Which sheet sizes and scales does your office
-   standardize on? That's a five-minute preset file and it makes the estimator
-   immediately correct instead of approximately correct.
-3. **Sheet numbering convention.** `C-01`, `SD-101`, plain `1`? Drives the
-   default naming template.
-4. **QGIS version floor.** Targeting 3.28 LTR unless you're on 3.34/3.40 —
-   this only affects a couple of API calls.
-5. **Distribution.** Just clone-and-symlink for you, or a zip release / plugin
-   repository entry so coworkers can install it?
+Answered so far by picking a default and moving on — say the word and any of
+these changes in one line:
+
+1. **QGIS floor: 3.34.** Lets the code use the modern `Qgis.*` enums without
+   compatibility shims.
+2. **Default paper: ARCH D (24x36) landscape, 1" margins.** Note ANSI D is
+   22x34 and ARCH D is 24x36 — an earlier draft of these docs had them
+   confused, which would have made every sheet 2" small.
+3. **Default sheet template: `C-{n:02d}`.**
+
+Still genuinely open:
+
+4. **Units.** Which CRS do you work in day to day — EPSG:2273 SC State Plane
+   ftUS? The tools read units from the layer's CRS, so nothing breaks either
+   way, but it decides whether the estimator's default scale ladder should be
+   imperial or metric.
+5. **Distribution.** Clone-and-symlink for you, or a zip release so coworkers
+   can install it? Only affects whether it's worth adding a release workflow.
