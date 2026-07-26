@@ -1,5 +1,9 @@
 # Installing Field Kit
 
+> Just want to try it? [`TRY-IT.md`](TRY-IT.md) walks through installing and
+> then running every tool on the sample data, with the numbers you should get.
+> This page is the reference for the details.
+
 Targets QGIS 3.34 or newer; developed against 3.40. No third-party Python
 packages - everything it uses ships with QGIS.
 

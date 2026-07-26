@@ -6,10 +6,14 @@ right-of-way from a centerline, laying out atlas sheet grids, clipping thirty
 layers to one boundary.
 
 **v0.2.0 — nine tools, installable, and verified against a real QGIS.**
-See [`docs/INSTALL.md`](docs/INSTALL.md). Requires QGIS 3.34+ and nothing else —
-no third-party Python packages. Every algorithm is exercised end to end on
-synthetic layers in EPSG:3361 by `tests/smoke_qgis.py`, which runs in CI
-against QGIS 3.34.
+Requires QGIS 3.34+ and nothing else — no third-party Python packages.
+
+### 👉 Start here: [`docs/TRY-IT.md`](docs/TRY-IT.md)
+
+A 20-minute test drive over the sample data in `sample/fieldkit_demo.gpkg`,
+which has known faults built into it — missing parcels, 3 ft slivers,
+overlapping boundaries, pipes that stop short. Every step says what you should
+see, so it's a test rather than a demo.
 
 ---
 
@@ -90,7 +94,10 @@ few states where `ft` vs `ftUS` isn't a trap.
 
 ## Documentation
 
-- [`docs/INSTALL.md`](docs/INSTALL.md) — install, customize, call from Python
+- [`docs/TRY-IT.md`](docs/TRY-IT.md) — **the guided walkthrough**: install,
+  check it loaded, run all nine tools on the sample data with expected results
+- [`docs/INSTALL.md`](docs/INSTALL.md) — install detail, customizing, calling
+  the tools from the Python console
 - [`docs/sheet-workflow.md`](docs/sheet-workflow.md) — generating a sheet set,
   moving sheets by hand, keeping the numbering and match lines correct
 - [`docs/tips/digitising-without-gaps.md`](docs/tips/digitising-without-gaps.md)
