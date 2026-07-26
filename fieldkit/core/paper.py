@@ -8,6 +8,9 @@ import re
 MM_PER_INCH = 25.4
 
 #: Metres per linear unit, for the CRS units that matter here.
+#: South Carolina State Plane (EPSG:3361 and friends) uses the *international*
+#: foot, unlike most states - so "ft" is the right entry for SC work, and the
+#: 2 ppm ftUS difference never comes into it. Do not "correct" this to ftUS.
 METRES_PER_UNIT = {
     "m": 1.0,
     "ft": 0.3048,  # international foot

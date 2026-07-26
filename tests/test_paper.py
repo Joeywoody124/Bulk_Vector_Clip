@@ -60,6 +60,24 @@ class DefaultsTest(unittest.TestCase):
         self.assertAlmostEqual(width, 2040.0, places=6)
         self.assertAlmostEqual(height, 1320.0, places=6)
 
+    def test_the_table_in_docs_tips_crs_notes(self):
+        """Lock the published sheet-size table so the docs cannot drift."""
+        expected = {
+            "Letter (8.5x11)": {240: (180, 130), 480: (360, 260),
+                                720: (540, 390), 1200: (900, 650)},
+            "Tabloid (11x17)": {240: (300, 180), 480: (600, 360),
+                                720: (900, 540), 1200: (1500, 900)},
+            "ARCH D (24x36)": {240: (680, 440), 480: (1360, 880),
+                               720: (2040, 1320), 1200: (3400, 2200)},
+        }
+        for name, by_scale in expected.items():
+            for denominator, (want_w, want_h) in by_scale.items():
+                width, height = paper.sheet_size(
+                    paper.PAPER_SIZES[name], 25.4, denominator,
+                    paper.METRES_PER_UNIT["ft"])
+                self.assertAlmostEqual(width, want_w, places=6, msg=name)
+                self.assertAlmostEqual(height, want_h, places=6, msg=name)
+
     def test_scale_list(self):
         self.assertEqual(
             paper.parse_scale_list("1\"=20',1\"=50',1:1000"), [240, 600, 1000]

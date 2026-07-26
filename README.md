@@ -76,10 +76,14 @@ top of the paper list, **ARCH D landscape** with 1" margins as the default, and
 1"=200'. Scales parse however you write them — `1"=60'`, `1"=60`, `1 in = 60 ft`
 and `1:720` are all the same thing.
 
-Sheet sizes come out in the layer's own units, read from its CRS, so an
-imperial scale in a metre CRS is fine — 24×36 at 1"=60' is 621.8 × 402.3 m,
-the same ground as 2040 × 1320 ft. All of this lives in
-`fieldkit/core/paper.py` and is a one-line edit.
+Sheet sizes come out in the layer's own units, read from its CRS. In
+**EPSG:3361 (NAD83(HARN) / South Carolina, feet)** a 24×36 at 1"=60' with 1"
+margins covers **2040 × 1320 ft**. The same settings in a metre CRS give
+621.8 × 402.3 m — the same ground, different numbers.
+
+All of this lives in `fieldkit/core/paper.py` and is a one-line edit. See
+[`docs/tips/crs-notes.md`](docs/tips/crs-notes.md) for why SC is one of the
+few states where `ft` vs `ftUS` isn't a trap.
 
 ## Documentation
 

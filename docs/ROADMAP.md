@@ -48,6 +48,7 @@ docs/
   INSTALL.md
   ROADMAP.md
   IDEAS.md
+  sheet-workflow.md          # generate -> move by hand -> renumber
   specs/atlas-grid-builder.md
   tips/                      # the "hacks and tips" half of the suite
 fieldkit/                    # the plugin package (zip this to install)
@@ -62,6 +63,7 @@ fieldkit/                    # the plugin package (zip this to install)
     close_undershoots.py
     atlas_grid_builder.py
     sheet_estimator.py
+    renumber_sheets.py
     bulk_vector_clip.py
     _grid.py                 # shared QGIS-side helpers for the sheet tools
   core/                      # pure python, no qgis imports — the tested part
@@ -97,7 +99,10 @@ title used here. Easy to change before first release, painful after.
       **Close dangling line ends** — the editing group, added to Phase 1 once
       it became clear that day-to-day editing, not sheet layout, is where the
       time actually goes
-- [x] `docs/tips/digitising-without-gaps.md`
+- [x] **Renumber sheets** — closes the loop: generate, move sheets by hand
+      with QGIS's own tools, then rebuild the numbering from where they sit
+- [x] `docs/tips/digitising-without-gaps.md`, `docs/tips/crs-notes.md`,
+      `docs/sheet-workflow.md`
 
 The architecture held: the `core/` vs `algs/` split paid for itself on the two
 sheet tools, which share all their maths and disagree about nothing.
@@ -143,8 +148,8 @@ so the flag would have been a parameter earning nothing.
 
 ### 3.2 Sheet Count Estimator
 
-**Input:** coverage layer, paper size, margins, a scale ladder
-(`1"=20'/30'/40'/50'/100'/200'` or `1:500/1:1000/1:2000/1:5000`), overlap %.
+**Input:** coverage layer, paper size, margins, a scale ladder (defaults to
+`1"=20'` through `1"=200'`, or write `1:500/1:1000/1:2000`), overlap %.
 
 **Output:** an HTML table in the Processing results panel —
 
@@ -221,10 +226,15 @@ are better as documentation than as code:
 - **crs-notes.md** — State Plane, `ft` vs `ftUS`, and when on-the-fly
   reprojection quietly costs you accuracy.
 
-Written so far: **digitising-without-gaps.md** — snapping configuration,
-topological editing, avoid-overlap, tracing, and the advanced digitising panel.
-That one came first because it is the honest answer to most of "help me trace
-without gaps": three settings beat any cleanup tool.
+Written so far:
+
+- **digitising-without-gaps.md** — snapping configuration, topological editing,
+  avoid-overlap, tracing, and the advanced digitising panel. It came first
+  because it is the honest answer to most of "help me trace without gaps":
+  three settings beat any cleanup tool.
+- **crs-notes.md** — EPSG:3361 and its neighbours, why South Carolina's
+  international foot means the `ftUS` trap doesn't apply here, and the sheet
+  size table for the paper/scale combinations in daily use.
 
 Each tool's own documentation lives in its `shortHelpString()`, which QGIS shows
 in the tool's help panel. That is where it gets read, so that is where it goes;
@@ -245,11 +255,12 @@ these changes in one line:
    confused, which would have made every sheet 2" small.
 3. **Default sheet template: `C-{n:02d}`.**
 
+4. **Working CRS: EPSG:3361**, NAD83(HARN) / South Carolina in feet. Its unit
+   is the *international* foot, so the estimator's ladder defaults to
+   engineering scales and the `ft`/`ftUS` question never arises — see
+   [`tips/crs-notes.md`](tips/crs-notes.md).
+
 Still genuinely open:
 
-4. **Units.** Which CRS do you work in day to day — EPSG:2273 SC State Plane
-   ftUS? The tools read units from the layer's CRS, so nothing breaks either
-   way, but it decides whether the estimator's default scale ladder should be
-   imperial or metric.
 5. **Distribution.** Clone-and-symlink for you, or a zip release so coworkers
    can install it? Only affects whether it's worth adding a release workflow.
