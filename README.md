@@ -15,6 +15,11 @@ which has known faults built into it — missing parcels, 3 ft slivers,
 overlapping boundaries, pipes that stop short. Every step says what you should
 see, so it's a test rather than a demo.
 
+**Just want the sheet grid tools?** [`dist/gridtools/`](dist/gridtools/) is a
+standalone plugin with those three, its own sample data, and a Windows
+installer — see [`dist/gridtools/README.md`](dist/gridtools/README.md). It
+installs alongside the full plugin without clashing.
+
 ---
 
 ## Why this exists

@@ -64,6 +64,17 @@ def site_boundary():
     return "site_boundary", QgsWkbTypes.Polygon, fields, [(geometry, ["Phase 1"])]
 
 
+def corridor_site():
+    """A 5000 x 500 ft strip running north-east at about 35 degrees.
+
+    Square to the axes this needs a huge bounding box and most sheets come out
+    nearly empty; with Rotation set to Auto the grid lines up with the strip.
+    """
+    fields = [("name", QVariant.String)]
+    geometry = polygon((4856, 5205), (5144, 4795), (9238, 7665), (8951, 8075))
+    return "corridor_site", QgsWkbTypes.Polygon, fields, [(geometry, ["Sewer outfall"])]
+
+
 def road_centerline():
     """Two roads with a bend. row_width drives the data-defined ROW offsets."""
     fields = [("name", QVariant.String), ("row_width", QVariant.Double)]
@@ -144,7 +155,7 @@ def field_sketch():
 
 
 LAYERS = [
-    site_boundary, road_centerline, parcels_with_gaps, parcels_with_overlaps,
+    site_boundary, corridor_site, road_centerline, parcels_with_gaps, parcels_with_overlaps,
     storm_pipes, survey_parcels, field_sketch,
 ]
 

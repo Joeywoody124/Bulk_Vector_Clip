@@ -1,0 +1,20 @@
+[general]
+name=Grid Tools
+qgisMinimumVersion=3.34
+description=Atlas sheet grids sized from paper and scale, sheet count estimates, and renumbering after you move sheets by hand.
+version=0.2.0
+author=Joeywoody124
+email=joeywoody124@gmail.com
+
+about=The sheet layout half of Field Kit, packaged on its own. Builds a numbered atlas sheet grid from a coverage polygon, a paper size and an engineering scale; estimates how many sheets a site takes across a ladder of scales without creating anything; and rebuilds sheet numbering, grid references and neighbour links from position after you have moved sheets around by hand. Installs alongside the full Field Kit plugin without clashing.
+
+tracker=https://github.com/Joeywoody124/Bulk_Vector_Clip/issues
+repository=https://github.com/Joeywoody124/Bulk_Vector_Clip
+homepage=https://github.com/Joeywoody124/Bulk_Vector_Clip
+
+tags=processing,atlas,layout,grid,sheets,civil
+
+category=Plugins
+experimental=True
+deprecated=False
+hasProcessingProvider=yes
