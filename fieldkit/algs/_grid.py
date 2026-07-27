@@ -1,0 +1,241 @@
+"""Shared QGIS-side helpers for the sheet grid tools.
+
+The maths lives in :mod:`fieldkit.core.gridmath`; this module is the thin layer
+that knows about geometries and CRSs.
+"""
+
+import math
+
+from qgis.core import (
+    Qgis,
+    QgsGeometry,
+    QgsPointXY,
+    QgsProcessingException,
+    QgsRectangle,
+    QgsUnitTypes,
+)
+
+from ..core import gridmath, paper
+
+# Qgis.DistanceUnit arrived in 3.30; fall back for older builds.
+_METERS = getattr(getattr(Qgis, "DistanceUnit", None), "Meters", None)
+if _METERS is None:  # pragma: no cover - depends on the QGIS build
+    _METERS = QgsUnitTypes.DistanceMeters
+
+UNIT_LABELS = [
+    "Auto (from the layer CRS)",
+    "Metres",
+    "International feet",
+    "US survey feet",
+]
+_UNIT_KEYS = [None, "m", "ft", "ftUS"]
+
+ANCHOR_LABELS = [
+    "Centre the grid on the coverage",
+    "Start at the coverage's lower-left corner",
+    "Snap the grid to a round coordinate",
+    "Start at a specific coordinate",
+]
+_ANCHORS = [
+    gridmath.ANCHOR_CENTER,
+    gridmath.ANCHOR_LOWER_LEFT,
+    gridmath.ANCHOR_SNAP,
+    gridmath.ANCHOR_ORIGIN,
+]
+
+ROTATION_LABELS = [
+    "None - sheets stay square to the grid",
+    "Auto - line the sheets up with the site",
+    "Specific angle",
+]
+ROT_NONE, ROT_AUTO, ROT_ANGLE = 0, 1, 2
+
+ORDER_LABELS = [
+    "Row by row, top to bottom",
+    "Row by row, bottom to top",
+    "Column by column",
+    "Serpentine (alternate direction each row)",
+]
+_ORDERS = [
+    gridmath.ORDER_ROW_NS,
+    gridmath.ORDER_ROW_SN,
+    gridmath.ORDER_COL,
+    gridmath.ORDER_SERPENTINE,
+]
+
+ORIENTATION_LABELS = ["Landscape", "Portrait"]
+
+
+def anchor_for(index):
+    return _ANCHORS[index]
+
+
+def order_for(index):
+    return _ORDERS[index]
+
+
+def metres_per_unit(crs, unit_index=0):
+    """Metres per map unit, either from the CRS or forced by the user."""
+    key = _UNIT_KEYS[unit_index]
+    if key is not None:
+        return paper.METRES_PER_UNIT[key]
+    if crs.isGeographic():
+        raise QgsProcessingException(
+            "The coverage layer is in a geographic CRS (%s), so its map units are "
+            "degrees and sheet sizes are meaningless. Reproject it to a projected "
+            "CRS - State Plane, UTM or similar - and run this again."
+            % crs.authid()
+        )
+    factor = QgsUnitTypes.fromUnitToUnitFactor(crs.mapUnits(), _METERS)
+    if factor <= 0:
+        raise QgsProcessingException(
+            "Cannot work out the map units of %s. Set the units parameter by hand."
+            % crs.authid()
+        )
+    return factor
+
+
+def dissolved_coverage(source, buffer_distance=0.0):
+    """One geometry covering everything the sheets have to reach."""
+    geometries = [
+        f.geometry() for f in source.getFeatures()
+        if f.hasGeometry() and not f.geometry().isEmpty()
+    ]
+    if not geometries:
+        raise QgsProcessingException("The coverage layer has no usable geometry.")
+    coverage = QgsGeometry.unaryUnion(geometries)
+    if coverage is None or coverage.isEmpty():
+        raise QgsProcessingException("Could not dissolve the coverage layer.")
+    if not coverage.isGeosValid():
+        repaired = coverage.makeValid()
+        if repaired is not None and not repaired.isEmpty():
+            coverage = repaired
+    if buffer_distance:
+        coverage = coverage.buffer(buffer_distance, 8)
+    return coverage
+
+
+def _rotated(geometry, degrees_clockwise, centre):
+    clone = QgsGeometry(geometry)
+    clone.rotate(degrees_clockwise, centre)
+    return clone
+
+
+def _long_edge_bearing(oriented_box):
+    """Angle of the longest edge of an oriented bounding box, in degrees.
+
+    ``orientedMinimumBoundingBox()`` also hands back the angle directly, but the
+    shape of its return value has moved around between QGIS versions and its
+    sign convention is undocumented. Measuring the box we were given is stable
+    across versions, and :func:`alignment` resolves the sign by trying both.
+    """
+    box = oriented_box[0] if isinstance(oriented_box, (tuple, list)) else oriented_box
+    if box is None or box.isEmpty():
+        return None
+    rings = box.asPolygon()
+    if not rings or len(rings[0]) < 3:
+        return None
+
+    ring = rings[0]
+    best, best_length = None, -1.0
+    for start, end in zip(ring, ring[1:]):
+        dx, dy = end.x() - start.x(), end.y() - start.y()
+        length = math.hypot(dx, dy)
+        if length > best_length:
+            best, best_length = (dx, dy), length
+    if best is None or best_length <= 0:
+        return None
+
+    # A rectangle's orientation only matters modulo 180 degrees; fold it into
+    # (-90, 90] so the grid never rotates further than it has to.
+    angle = math.degrees(math.atan2(best[1], best[0]))
+    while angle > 90.0:
+        angle -= 180.0
+    while angle <= -90.0:
+        angle += 180.0
+    return angle
+
+
+def alignment(coverage, mode, angle=0.0):
+    """Return (theta, centre): rotate the world by theta to square it to the grid.
+
+    For the automatic mode the angle comes from the oriented minimum bounding
+    box. Its sign convention is not worth guessing at, so both signs are tried
+    and whichever squares the coverage up more tightly wins.
+    """
+    centre_point = coverage.centroid().asPoint()
+    centre = QgsPointXY(centre_point.x(), centre_point.y())
+
+    if mode == ROT_NONE:
+        return 0.0, centre
+    if mode == ROT_ANGLE:
+        return float(angle), centre
+
+    candidate = _long_edge_bearing(coverage.orientedMinimumBoundingBox())
+    if candidate is None or abs(candidate) < 1e-9:
+        return 0.0, centre
+
+    best, best_area = 0.0, coverage.boundingBox().area()
+    for theta in (candidate, -candidate):
+        area = _rotated(coverage, theta, centre).boundingBox().area()
+        if area < best_area - 1e-9:
+            best, best_area = theta, area
+    return best, centre
+
+
+def build_cells(coverage, cell_w, cell_h, overlap_x, overlap_y, anchor,
+                snap_to=0.0, origin=None, theta=0.0, centre=None,
+                cull=True, min_coverage_pct=0.0, feedback=None):
+    """Lay the grid out and return (grid, cells).
+
+    Each cell is a dict with ``row``, ``col``, ``geometry`` (in world space)
+    and ``cov_pct``. Culling happens in the rotated frame, where the maths is
+    plain rectangle arithmetic.
+    """
+    working = _rotated(coverage, theta, centre) if theta else coverage
+    box = working.boundingBox()
+    grid = gridmath.grid_origin(
+        (box.xMinimum(), box.yMinimum(), box.xMaximum(), box.yMaximum()),
+        cell_w, cell_h, overlap_x, overlap_y, anchor, snap_to, origin,
+    )
+
+    engine_area = working.area()
+    cells = []
+    dropped_empty = 0
+    dropped_sliver = 0
+
+    for row in range(grid["nrows"]):
+        for col in range(grid["ncols"]):
+            xmin, ymin, xmax, ymax = gridmath.cell_bounds(grid, cell_w, cell_h, row, col)
+            rectangle = QgsGeometry.fromRect(QgsRectangle(xmin, ymin, xmax, ymax))
+
+            cov_pct = 0.0
+            if rectangle.intersects(working):
+                overlap = rectangle.intersection(working)
+                cell_area = rectangle.area()
+                if overlap is not None and not overlap.isEmpty() and cell_area:
+                    cov_pct = overlap.area() / cell_area * 100.0
+
+            if cull:
+                if cov_pct <= 0.0:
+                    dropped_empty += 1
+                    continue
+                if cov_pct < min_coverage_pct:
+                    dropped_sliver += 1
+                    continue
+
+            geometry = _rotated(rectangle, -theta, centre) if theta else rectangle
+            cells.append({"row": row, "col": col, "geometry": geometry,
+                          "cov_pct": cov_pct})
+
+    if feedback is not None:
+        feedback.pushInfo(
+            "Grid %d x %d = %d cells; kept %d (%d empty, %d below the coverage "
+            "threshold)." % (grid["ncols"], grid["nrows"],
+                             grid["ncols"] * grid["nrows"], len(cells),
+                             dropped_empty, dropped_sliver)
+        )
+        if engine_area <= 0:
+            feedback.pushWarning("The coverage has zero area.")
+
+    return grid, cells
